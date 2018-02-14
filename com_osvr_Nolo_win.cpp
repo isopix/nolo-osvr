@@ -312,9 +312,16 @@ namespace {
 			double k = data.z;
 			double mag = sqrt(i*i + j*j + k*k);
 			osvrQuatSetW(&vel.angularVelocity.incrementalRotation, angularVelocityScale * mag);
-			osvrQuatSetX(&vel.angularVelocity.incrementalRotation, angularVelocityScale * i);
-			osvrQuatSetY(&vel.angularVelocity.incrementalRotation, angularVelocityScale * k);
-			osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, angularVelocityScale * -j);
+			if (mag > 0.0){
+				osvrQuatSetX(&vel.angularVelocity.incrementalRotation, i / mag);
+				osvrQuatSetY(&vel.angularVelocity.incrementalRotation, k / mag);
+				osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, -j / mag);
+			}
+			else{
+				osvrQuatSetX(&vel.angularVelocity.incrementalRotation, 0.0);
+				osvrQuatSetY(&vel.angularVelocity.incrementalRotation, 0.0);
+				osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, 0.0);
+			}
 			vel.angularVelocity.dt = angularVelocityDt;
 			vel.angularVelocityValid = true;
 		}
@@ -329,16 +336,23 @@ namespace {
 
 		void SetAngularAcceleration(OSVR_AccelerationState& acc, NOLO::Vector3& data) {
 			double angularAccelerationScale = 1.0f;
-			double angularAcceleartionDt = 1.0f;
+			double angularAccelertionDt = 1.0f;
 			double i = data.x;
 			double j = data.y;
 			double k = data.z;
 			double mag = sqrt(i*i + j*j + k*k);
 			osvrQuatSetW(&acc.angularAcceleration.incrementalRotation, angularAccelerationScale * mag);
-			osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, angularAccelerationScale * i);
-			osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, angularAccelerationScale * k);
-			osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, angularAccelerationScale * -j);
-			acc.angularAcceleration.dt = angularAcceleartionDt;
+			if (mag > 0.0){
+				osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, i / mag);
+				osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, k / mag);
+				osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, -j / mag);
+			}
+			else{
+				osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, 0.0);
+				osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, 0.0);
+				osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, 0.0);
+			}
+			acc.angularAcceleration.dt = angularAccelertionDt;
 			acc.angularAccelerationValid = true;
 		}
 
