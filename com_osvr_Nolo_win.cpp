@@ -28,6 +28,7 @@ Nanospork
 #include <osvr/PluginKit/ButtonInterfaceC.h>
 #include <osvr/PluginKit/TrackerInterfaceC.h>
 
+
 // Generated JSON header file
 #include "com_osvr_Nolo_json.h"
 
@@ -126,15 +127,6 @@ namespace {
 			}
 
 			osvrTimeValueGetNow(&device.m_lastreport_time);
-			//static int i = 0;
-			//if (i > 1000) {
-			//	std::cout << device.m_lastreport_time.seconds << " " << device.m_lastreport_time.microseconds << "\n";
-			//	std::cout << data.right_Controller_Data.vecVelocity.x << "," << data.right_Controller_Data.vecVelocity.y << "," << data.right_Controller_Data.vecVelocity.z << "\n";
-			//	std::cout << data.left_Controller_Data.vecVelocity.x << "," << data.left_Controller_Data.vecVelocity.y << "," << data.left_Controller_Data.vecVelocity.z << "\n";
-			//	std::cout.flush();
-			//	i = 0;
-			//}
-			//++i;
 
 			double translationScale = 1.0f;
 
@@ -305,23 +297,26 @@ namespace {
 		}
 
 		void SetAngularVelocity(OSVR_VelocityState& vel, NOLO::Vector3& data) {
+			// convert from axis-angle to quaternion
 			double angularVelocityScale = 1.0f;
 			double angularVelocityDt = 1.0f;
 			double i = data.x;
 			double j = data.y;
 			double k = data.z;
-			double mag = sqrt(i*i + j*j + k*k);
-			osvrQuatSetW(&vel.angularVelocity.incrementalRotation, angularVelocityScale * mag);
-			if (mag > 0.0){
-				osvrQuatSetX(&vel.angularVelocity.incrementalRotation, i / mag);
-				osvrQuatSetY(&vel.angularVelocity.incrementalRotation, k / mag);
-				osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, -j / mag);
+			double angle = sqrt(i*i + j*j + k*k);
+
+			// get unit vector
+			if (angle != 0.0){
+				i /= angle; 
+				j /= angle; 
+				k /= angle; 
 			}
-			else{
-				osvrQuatSetX(&vel.angularVelocity.incrementalRotation, 0.0);
-				osvrQuatSetY(&vel.angularVelocity.incrementalRotation, 0.0);
-				osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, 0.0);
-			}
+
+			osvrQuatSetX(&vel.angularVelocity.incrementalRotation, i * sin(angle/2.0));
+			osvrQuatSetY(&vel.angularVelocity.incrementalRotation, j * sin(angle/2.0));
+			osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, k * sin(angle/2.0));
+			osvrQuatSetW(&vel.angularVelocity.incrementalRotation, cos(angularVelocityScale * angle/2.0));
+
 			vel.angularVelocity.dt = angularVelocityDt;
 			vel.angularVelocityValid = true;
 		}
@@ -330,7 +325,7 @@ namespace {
 			double accelerationScale = 1.0f;
 			osvrVec3SetX(&acc.linearAcceleration, accelerationScale * data.x);
 			osvrVec3SetY(&acc.linearAcceleration, accelerationScale * data.y);
-			osvrVec3SetZ(&acc.linearAcceleration, accelerationScale * -data.z);
+			osvrVec3SetZ(&acc.linearAcceleration, accelerationScale * data.z);
 			acc.linearAccelerationValid = true;
 		}
 
@@ -340,18 +335,20 @@ namespace {
 			double i = data.x;
 			double j = data.y;
 			double k = data.z;
-			double mag = sqrt(i*i + j*j + k*k);
-			osvrQuatSetW(&acc.angularAcceleration.incrementalRotation, angularAccelerationScale * mag);
-			if (mag > 0.0){
-				osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, i / mag);
-				osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, k / mag);
-				osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, -j / mag);
+			double angle = sqrt(i*i + j*j + k*k);
+
+			// get unit vector
+			if (angle != 0.0){
+				i /= angle;
+				j /= angle;
+				k /= angle;
 			}
-			else{
-				osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, 0.0);
-				osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, 0.0);
-				osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, 0.0);
-			}
+
+			osvrQuatSetX(&acc.angularAcceleration.incrementalRotation, i * sin(angle / 2.0));
+			osvrQuatSetY(&acc.angularAcceleration.incrementalRotation, j * sin(angle / 2.0));
+			osvrQuatSetZ(&acc.angularAcceleration.incrementalRotation, k * sin(angle / 2.0));
+			osvrQuatSetW(&acc.angularAcceleration.incrementalRotation, cos(angularAccelerationScale * angle / 2.0));
+
 			acc.angularAcceleration.dt = angularAccelertionDt;
 			acc.angularAccelerationValid = true;
 		}
