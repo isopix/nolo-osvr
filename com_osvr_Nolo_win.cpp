@@ -28,7 +28,6 @@ Nanospork
 #include <osvr/PluginKit/ButtonInterfaceC.h>
 #include <osvr/PluginKit/TrackerInterfaceC.h>
 
-
 // Generated JSON header file
 #include "com_osvr_Nolo_json.h"
 
@@ -40,8 +39,10 @@ Nanospork
 #include <wchar.h>
 #include <string.h>
 
+#include <json/json.h>
+
 // Anonymous namespace to avoid symbol collision
-namespace {
+namespace com_osvr_Nolo {
 
 	const static int NUM_AXIS = 4;
 	const static int NUM_BUTTONS = 6;
@@ -76,13 +77,14 @@ namespace {
 			NOLO::registerConnectSuccessCallBack(connectNolo, this);
 			NOLO::registerExpandDataNotifyCallBack(expandDataNotify, this);
 
-			// Celing mode should be taken care of in the OSVR server config!
-			//std::cout << "Nolo: Set CeilingMode" << std::endl; 
-			//NOLO::set_Nolo_PlayMode(NOLO::CeilingMode);
-
 			// Switch to polling structure to avoid strange SteamVR bug.
 			NOLO::registerNoloDataNotifyCallBack(noloDataNotify, this);
 			NOLO::search_Nolo_Device();
+
+			//std::cout << "Nolo: Set CeilingMode" << std::endl;
+			//NOLO::set_Nolo_PlayMode(NOLO::CeilingMode);
+
+			m_ceiling_mode = true;
 
 		}
 		~NoloDevice() {
@@ -191,7 +193,7 @@ namespace {
 					rightTrigger = (int)rightValue;
 				}
 				osvrDeviceButtonSetValueTimestamped(device.m_dev, device.m_button, leftValue, bid, &device.m_lastreport_time);
-				osvrDeviceButtonSetValueTimestamped(device.m_dev, device.m_button, rightValue, bid+NUM_BUTTONS, &device.m_lastreport_time);
+				osvrDeviceButtonSetValueTimestamped(device.m_dev, device.m_button, rightValue, bid + NUM_BUTTONS, &device.m_lastreport_time);
 			}
 			osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, leftTrigger, 2, &device.m_lastreport_time);
 			osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, rightTrigger, 6, &device.m_lastreport_time);
@@ -199,13 +201,13 @@ namespace {
 			/*
 			Report Analog Touchpad
 			*/
-			static double m_last_axis[4] = { 0.0, 0.0, 0.0, 0.0 }; 
-			static bool not_touched[2] = { true, true }; 
+			static double m_last_axis[4] = { 0.0, 0.0, 0.0, 0.0 };
+			static bool not_touched[2] = { true, true };
 
 			if (data.left_Controller_Data.ControllerTouched){
 				float leftx = data.left_Controller_Data.ControllerTouchAxis.x;
 				float lefty = data.left_Controller_Data.ControllerTouchAxis.y;
-				
+
 				if ((m_last_axis[0] != leftx) || (m_last_axis[1] != lefty)){
 					osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, leftx, 0, &device.m_lastreport_time);
 					osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, lefty, 1, &device.m_lastreport_time);
@@ -213,7 +215,7 @@ namespace {
 
 				m_last_axis[0] = leftx;
 				m_last_axis[1] = lefty;
-				not_touched[0] = true; 
+				not_touched[0] = true;
 
 			}
 			else{
@@ -221,7 +223,7 @@ namespace {
 					// report a centered value if not touched
 					osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, 0.0, 0, &device.m_lastreport_time);
 					osvrDeviceAnalogSetValueTimestamped(device.m_dev, device.m_analog, 0.0, 1, &device.m_lastreport_time);
-					not_touched[0] = false; 
+					not_touched[0] = false;
 				}
 			}
 
@@ -276,9 +278,16 @@ namespace {
 
 		void SetPosition(OSVR_PositionState& pos, NOLO::Vector3& data) {
 			double translationScale = 1.0f;
-			osvrVec3SetX(&pos, translationScale * data.x);
-			osvrVec3SetY(&pos, translationScale * data.y);
-			osvrVec3SetZ(&pos, translationScale * -data.z);
+			if (m_ceiling_mode){
+				osvrVec3SetX(&pos, translationScale * data.x);
+				osvrVec3SetY(&pos, translationScale * data.z);
+				osvrVec3SetZ(&pos, translationScale * data.y);
+			}
+			else{
+				osvrVec3SetX(&pos, translationScale * data.x);
+				osvrVec3SetY(&pos, translationScale * data.y);
+				osvrVec3SetZ(&pos, translationScale * -data.z);
+			}
 		}
 
 		void SetRotation(OSVR_Quaternion& quat, NOLO::Quaternion& data) {
@@ -290,9 +299,16 @@ namespace {
 
 		void SetLinearVelocity(OSVR_VelocityState& vel, NOLO::Vector3& data) {
 			double velocityScale = 1.0f;
-			osvrVec3SetX(&vel.linearVelocity, velocityScale * data.x);
-			osvrVec3SetY(&vel.linearVelocity, velocityScale * data.y);
-			osvrVec3SetZ(&vel.linearVelocity, velocityScale * data.z);
+			if (m_ceiling_mode){
+				osvrVec3SetX(&vel.linearVelocity, velocityScale * data.x);
+				osvrVec3SetY(&vel.linearVelocity, velocityScale * -data.z);
+				osvrVec3SetZ(&vel.linearVelocity, velocityScale * data.y);
+			}
+			else{
+				osvrVec3SetX(&vel.linearVelocity, velocityScale * data.x);
+				osvrVec3SetY(&vel.linearVelocity, velocityScale * data.y);
+				osvrVec3SetZ(&vel.linearVelocity, velocityScale * data.z);
+			}
 			vel.linearVelocityValid = true;
 		}
 
@@ -300,22 +316,22 @@ namespace {
 			// convert from axis-angle to quaternion
 			double angularVelocityScale = 1.0f;
 			double angularVelocityDt = 1.0f;
-			double i = data.x;
-			double j = data.y;
+			double i = -data.x;
+			double j = -data.y;
 			double k = data.z;
 			double angle = sqrt(i*i + j*j + k*k);
 
 			// get unit vector
 			if (angle != 0.0){
-				i /= angle; 
-				j /= angle; 
-				k /= angle; 
+				i /= angle;
+				j /= angle;
+				k /= angle;
 			}
 
-			osvrQuatSetX(&vel.angularVelocity.incrementalRotation, i * sin(angle/2.0));
-			osvrQuatSetY(&vel.angularVelocity.incrementalRotation, j * sin(angle/2.0));
-			osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, k * sin(angle/2.0));
-			osvrQuatSetW(&vel.angularVelocity.incrementalRotation, cos(angularVelocityScale * angle/2.0));
+			osvrQuatSetX(&vel.angularVelocity.incrementalRotation, i * sin(angle / 2.0));
+			osvrQuatSetY(&vel.angularVelocity.incrementalRotation, j * sin(angle / 2.0));
+			osvrQuatSetZ(&vel.angularVelocity.incrementalRotation, k * sin(angle / 2.0));
+			osvrQuatSetW(&vel.angularVelocity.incrementalRotation, cos(angularVelocityScale * angle / 2.0));
 
 			vel.angularVelocity.dt = angularVelocityDt;
 			vel.angularVelocityValid = true;
@@ -323,17 +339,24 @@ namespace {
 
 		void SetLinearAcceleration(OSVR_AccelerationState& acc, NOLO::Vector3& data) {
 			double accelerationScale = 1.0f;
-			osvrVec3SetX(&acc.linearAcceleration, accelerationScale * data.x);
-			osvrVec3SetY(&acc.linearAcceleration, accelerationScale * data.y);
-			osvrVec3SetZ(&acc.linearAcceleration, accelerationScale * data.z);
+			if (m_ceiling_mode){
+				osvrVec3SetX(&acc.linearAcceleration, accelerationScale * data.x);
+				osvrVec3SetY(&acc.linearAcceleration, accelerationScale * -data.z);
+				osvrVec3SetZ(&acc.linearAcceleration, accelerationScale * data.y);
+			}
+			else{
+				osvrVec3SetX(&acc.linearAcceleration, accelerationScale * data.x);
+				osvrVec3SetY(&acc.linearAcceleration, accelerationScale * data.y);
+				osvrVec3SetZ(&acc.linearAcceleration, accelerationScale * data.z);
+			}
 			acc.linearAccelerationValid = true;
 		}
 
 		void SetAngularAcceleration(OSVR_AccelerationState& acc, NOLO::Vector3& data) {
 			double angularAccelerationScale = 1.0f;
 			double angularAccelertionDt = 1.0f;
-			double i = data.x;
-			double j = data.y;
+			double i = -data.x;
+			double j = -data.y;
 			double k = data.z;
 			double angle = sqrt(i*i + j*j + k*k);
 
@@ -364,11 +387,11 @@ namespace {
 		osvr::pluginkit::DeviceToken m_dev;
 		bool m_is_nolo_connected;
 		bool m_new_data_available;
+		bool m_ceiling_mode;
 		OSVR_AnalogDeviceInterface m_analog;
 		OSVR_ButtonDeviceInterface m_button;
 		OSVR_TrackerDeviceInterface m_tracker;
 		OSVR_TimeValue m_lastreport_time;
-		//OSVR_Vec3 m_last_home;
 	};
 
 	class HardwareDetection {
@@ -377,8 +400,7 @@ namespace {
 		OSVR_ReturnCode operator()(OSVR_PluginRegContext ctx) {
 
 			// TODO: probe for new devices only
-			if (m_found)
-				return OSVR_RETURN_SUCCESS;
+			if (m_found) return OSVR_RETURN_SUCCESS;
 
 			osvr::pluginkit::registerObjectForDeletion
 				(ctx, new NoloDevice(ctx));
@@ -392,13 +414,14 @@ namespace {
 		/// instance)
 		bool m_found;
 	};
+
 } // namespace
 
 OSVR_PLUGIN(com_osvr_Nolo) {
 	osvr::pluginkit::PluginContext context(ctx);
 
 	/// Register a detection callback function object.
-	context.registerHardwareDetectCallback(new HardwareDetection());
+	context.registerHardwareDetectCallback(new com_osvr_Nolo::HardwareDetection());
 
 	return OSVR_RETURN_SUCCESS;
 }
